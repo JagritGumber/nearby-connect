@@ -1,14 +1,16 @@
 import { Hono } from "hono";
 import { databaseMiddleware } from "./lib/database";
 import { HealthCheckService } from "./lib/health-check";
+import { createClerkMiddleware, requireAuth } from "./lib/auth";
+import {
+  getOrCreateUser,
+  updateUserProfile,
+  updateUserLocation,
+  updateUserOnlineStatus,
+} from "./lib/user-service";
+import { DefaultContext } from "./types/context";
 
-const app = new Hono<{
-  Bindings: CloudflareBindings;
-  Variables: {
-    client: ReturnType<typeof databaseMiddleware>["client"];
-    db: ReturnType<typeof databaseMiddleware>["db"];
-  };
-}>();
+const app = new Hono<DefaultContext>();
 
 // Database middleware to inject database instances
 app.use("*", async (c, next) => {
@@ -17,6 +19,9 @@ app.use("*", async (c, next) => {
   c.set("db", db);
   await next();
 });
+
+// Clerk authentication middleware
+app.use("*", createClerkMiddleware());
 
 // Health check endpoint
 app.get("/health", async (c) => {
@@ -80,6 +85,123 @@ app.get("/api/users", async (c) => {
       {
         success: false,
         error: error instanceof Error ? error.message : "Database query failed",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Protected route example - get current user profile
+app.get("/api/profile", requireAuth, async (c) => {
+  try {
+    const userProfile = await getOrCreateUser(c);
+
+    return c.json({
+      success: true,
+      data: userProfile,
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to get profile",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Protected route example - update user profile
+app.put("/api/profile", requireAuth, async (c) => {
+  try {
+    const body = await c.req.json();
+    const updatedProfile = await updateUserProfile(c, body);
+
+    return c.json({
+      success: true,
+      data: updatedProfile,
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to update profile",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Protected route example - update user location
+app.put("/api/location", requireAuth, async (c) => {
+  try {
+    const body = await c.req.json();
+    const { latitude, longitude } = body;
+
+    if (!latitude || !longitude) {
+      return c.json(
+        {
+          success: false,
+          error: "Latitude and longitude are required",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    const updatedProfile = await updateUserLocation(c, latitude, longitude);
+
+    return c.json({
+      success: true,
+      data: updatedProfile,
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to update location",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Protected route example - update online status
+app.put("/api/status", requireAuth, async (c) => {
+  try {
+    const body = await c.req.json();
+    const { isOnline } = body;
+
+    if (typeof isOnline !== "boolean") {
+      return c.json(
+        {
+          success: false,
+          error: "isOnline must be a boolean",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    const updatedProfile = await updateUserOnlineStatus(c, isOnline);
+
+    return c.json({
+      success: true,
+      data: updatedProfile,
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to update status",
         timestamp: Date.now(),
       },
       500
