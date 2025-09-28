@@ -1,0 +1,91 @@
+name = "nearby-connect-backend"
+main = "src/index.ts"
+compatibility_date = "2025-09-27"
+
+# Environment variables (use wrangler secret put for sensitive values)
+[vars]
+NODE_ENV = "production"
+APP_NAME = "NearbyConnect"
+
+# Secrets (use wrangler secret put for these)
+# CLERK_SECRET_KEY = "your_clerk_secret_key"
+# TURSO_AUTH_TOKEN = "your_turso_auth_token"
+# R2_ACCESS_KEY_ID = "your_r2_access_key_id"
+# R2_SECRET_ACCESS_KEY = "your_r2_secret_access_key"
+
+# Durable Objects configuration
+[[durable_objects.bindings]]
+name = "DO_SESSION"
+class_name = "SessionManager"
+
+[[durable_objects.bindings]]
+name = "DO_WEBSOCKET"
+class_name = "WebSocketManager"
+
+[[durable_objects.bindings]]
+name = "DO_LOCATION"
+class_name = "LocationTracker"
+
+# Migrations for Durable Objects
+[[migrations]]
+tag = "v1"
+new_classes = ["SessionManager", "WebSocketManager", "LocationTracker"]
+
+# R2 storage configuration
+[[r2_buckets]]
+binding = "R2_STORAGE"
+bucket_name = "nearby-connect-storage"
+preview_bucket_name = "nearby-connect-storage-preview"
+
+# D1 Database (alternative to Turso if using D1)
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "nearby-connect-db"
+# database_id = "your_database_id"
+
+# KV storage (if needed)
+# [[kv_namespaces]]
+# binding = "KV_CACHE"
+# id = "your_kv_namespace_id"
+# preview_id = "your_kv_namespace_preview_id"
+
+# Hyperdrive (if using traditional databases)
+# [[hyperdrive]]
+# binding = "HYPERDRIVE"
+# id = "your_hyperdrive_id"
+
+# Environment-specific configurations
+[env.production]
+name = "nearby-connect-backend-prod"
+routes = [
+  { pattern = "api.nearbyconnect.com/*", zone_name = "nearbyconnect.com" }
+]
+
+[env.production.vars]
+NODE_ENV = "production"
+APP_URL = "https://api.nearbyconnect.com"
+
+[env.staging]
+name = "nearby-connect-backend-staging"
+routes = [
+  { pattern = "staging-api.nearbyconnect.com/*", zone_name = "nearbyconnect.com" }
+]
+
+[env.staging.vars]
+NODE_ENV = "staging"
+APP_URL = "https://staging-api.nearbyconnect.com"
+
+[env.preview]
+preview_bucket_name = "nearby-connect-storage-preview"
+
+# Build configuration
+[build]
+command = "npm run build"
+
+# Deployment configuration
+[build.upload]
+format = "modules"
+
+# Observability
+[observability]
+enabled = true

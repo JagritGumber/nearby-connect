@@ -1,0 +1,29 @@
+{
+	"name": "backend",
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler dev",
+		"deploy": "wrangler deploy --minify",
+		"deploy:prod": "wrangler deploy --minify --env production",
+		"cf-typegen": "wrangler types --env-interface CloudflareBindings",
+		"build": "wrangler deploy --dry-run --outdir dist",
+		"check": "tsc --noEmit",
+		"type-check": "tsc --noEmit",
+		"lint": "echo 'No linter configured yet'",
+		"test": "echo 'No tests configured yet'",
+		"db:generate": "echo 'Database schema generation not configured yet'",
+		"db:migrate": "echo 'Database migrations not configured yet'"
+	},
+	"dependencies": {
+		"@clerk/backend": "^2.16.0",
+		"@libsql/client": "^0.15.15",
+		"@types/better-sqlite3": "^7.6.13",
+		"drizzle-kit": "^0.31.5",
+		"drizzle-orm": "^0.44.5",
+		"hono": "^4.9.9"
+	},
+	"devDependencies": {
+		"@types/node": "^24.5.2",
+		"wrangler": "^4.40.2"
+	}
+}
