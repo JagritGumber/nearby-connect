@@ -47,6 +47,14 @@ import { ChatRoomDurableObject } from "./lib/chat-room-durable-object";
 import { PresenceDurableObject } from "./lib/presence-durable-object";
 import { messages, chats } from "./db/schema";
 import { eq } from "drizzle-orm";
+import { createR2Service } from "./lib/r2-service";
+import {
+  validateFile,
+  checkUploadRateLimit,
+  checkFileAccess,
+  FILE_TYPE_CATEGORIES,
+} from "./lib/file-utils";
+import { FileCategory, FILE_UPLOAD_CONFIG } from "./lib/r2-service";
 
 // Interface for ChatRoom Durable Object stub
 interface ChatRoomStub {
@@ -930,6 +938,474 @@ app.get("/api/marketplace/search", requireAuth, async (c) => {
         success: false,
         error:
           error instanceof Error ? error.message : "Failed to search listings",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// ===== FILE STORAGE ROUTES =====
+
+// Upload single file
+app.post("/api/upload", requireAuth, async (c) => {
+  try {
+    const user = c.get("user");
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          error: "User not authenticated",
+          timestamp: Date.now(),
+        },
+        401
+      );
+    }
+
+    // Check rate limiting
+    if (!checkUploadRateLimit(user.id)) {
+      return c.json(
+        {
+          success: false,
+          error: "Upload rate limit exceeded. Please try again later.",
+          timestamp: Date.now(),
+        },
+        429
+      );
+    }
+
+    const formData = await c.req.formData();
+    const file = formData.get("file") as File | null;
+    const category = ((formData.get("category") as string) ||
+      FILE_TYPE_CATEGORIES.OTHER) as FileCategory;
+    const isPublic = formData.get("isPublic") === "true";
+    const expiresAt = formData.get("expiresAt")
+      ? parseInt(formData.get("expiresAt") as string)
+      : undefined;
+
+    if (!file) {
+      return c.json(
+        {
+          success: false,
+          error: "No file provided",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    // Validate file
+    const validation = await validateFile(file);
+    if (!validation.isValid) {
+      return c.json(
+        {
+          success: false,
+          error: "File validation failed",
+          details: validation.errors,
+          warnings: validation.warnings,
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    // Create R2 service and upload file
+    const r2Service = createR2Service(c);
+    const uploadOptions = {
+      category,
+      isPublic,
+      ...(expiresAt && { expiresAt }),
+      metadata: {
+        uploadedBy: user,
+        uploadSource: "api",
+      },
+    };
+
+    const result = await r2Service.uploadFile(c, file, uploadOptions);
+
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to upload file",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Upload multiple files
+app.post("/api/upload/multiple", requireAuth, async (c) => {
+  try {
+    const user = c.get("user");
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          error: "User not authenticated",
+          timestamp: Date.now(),
+        },
+        401
+      );
+    }
+
+    // Check rate limiting
+    if (!checkUploadRateLimit(user.id)) {
+      return c.json(
+        {
+          success: false,
+          error: "Upload rate limit exceeded. Please try again later.",
+          timestamp: Date.now(),
+        },
+        429
+      );
+    }
+
+    const formData = await c.req.formData();
+    const files = formData.getAll("files") as File[];
+    const category = ((formData.get("category") as string) ||
+      FILE_TYPE_CATEGORIES.OTHER) as FileCategory;
+    const isPublic = formData.get("isPublic") === "true";
+    const expiresAt = formData.get("expiresAt")
+      ? parseInt(formData.get("expiresAt") as string)
+      : undefined;
+
+    if (!files || files.length === 0) {
+      return c.json(
+        {
+          success: false,
+          error: "No files provided",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    // Validate all files
+    const validationResults = await Promise.all(files.map(validateFile));
+    const allValid = validationResults.every((v) => v.isValid);
+
+    if (!allValid) {
+      const allErrors = validationResults.flatMap((v) => v.errors);
+      const allWarnings = validationResults.flatMap((v) => v.warnings);
+
+      return c.json(
+        {
+          success: false,
+          error: "File validation failed",
+          details: allErrors,
+          warnings: allWarnings,
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    // Create R2 service and upload files
+    const r2Service = createR2Service(c);
+    const uploadOptions = {
+      category,
+      isPublic,
+      ...(expiresAt && { expiresAt }),
+      metadata: {
+        uploadedBy: user,
+        uploadSource: "api",
+      },
+    };
+
+    const results = await r2Service.uploadMultipleFiles(
+      c,
+      files,
+      uploadOptions
+    );
+
+    return c.json({
+      success: true,
+      data: results,
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to upload files",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Get file metadata
+app.get("/api/files/:key/metadata", requireAuth, async (c) => {
+  try {
+    const key = c.req.param("key");
+    if (!key) {
+      return c.json(
+        {
+          success: false,
+          error: "File key is required",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    const r2Service = createR2Service(c);
+    const metadata = await r2Service.getFileMetadata(key);
+
+    if (!metadata) {
+      return c.json(
+        {
+          success: false,
+          error: "File not found",
+          timestamp: Date.now(),
+        },
+        404
+      );
+    }
+
+    // Check access permissions
+    const user = c.get("user");
+    const accessCheck = checkFileAccess(
+      metadata.uploadedBy,
+      user?.id || "",
+      metadata.isPublic
+    );
+
+    if (!accessCheck.allowed) {
+      return c.json(
+        {
+          success: false,
+          error: accessCheck.reason || "Access denied",
+          timestamp: Date.now(),
+        },
+        403
+      );
+    }
+
+    return c.json({
+      success: true,
+      data: metadata,
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to get file metadata",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Download file
+app.get("/api/files/:key", requireAuth, async (c) => {
+  try {
+    const key = c.req.param("key");
+    if (!key) {
+      return c.json(
+        {
+          success: false,
+          error: "File key is required",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    const r2Service = createR2Service(c);
+    const fileBuffer = await r2Service.downloadFile(key);
+
+    if (!fileBuffer) {
+      return c.json(
+        {
+          success: false,
+          error: "File not found",
+          timestamp: Date.now(),
+        },
+        404
+      );
+    }
+
+    // Get file metadata for content type and access check
+    const metadata = await r2Service.getFileMetadata(key);
+    if (!metadata) {
+      return c.json(
+        {
+          success: false,
+          error: "File metadata not found",
+          timestamp: Date.now(),
+        },
+        404
+      );
+    }
+
+    // Check access permissions
+    const user = c.get("user");
+    const accessCheck = checkFileAccess(
+      metadata.uploadedBy,
+      user?.id || "",
+      metadata.isPublic
+    );
+
+    if (!accessCheck.allowed) {
+      return c.json(
+        {
+          success: false,
+          error: accessCheck.reason || "Access denied",
+          timestamp: Date.now(),
+        },
+        403
+      );
+    }
+
+    // Return file with proper headers
+    return new Response(fileBuffer, {
+      headers: {
+        "Content-Type": metadata.mimeType,
+        "Content-Disposition": `inline; filename="${metadata.originalName}"`,
+        "Cache-Control": metadata.isPublic
+          ? "public, max-age=3600"
+          : "private, max-age=300",
+      },
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to download file",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Delete file
+app.delete("/api/files/:key", requireAuth, async (c) => {
+  try {
+    const key = c.req.param("key");
+    if (!key) {
+      return c.json(
+        {
+          success: false,
+          error: "File key is required",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    const r2Service = createR2Service(c);
+    const deleted = await r2Service.deleteFile(c, key);
+
+    return c.json({
+      success: true,
+      data: { deleted },
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to delete file",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Get user's files with pagination
+app.get("/api/files", requireAuth, async (c) => {
+  try {
+    const user = c.get("user");
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          error: "User not authenticated",
+          timestamp: Date.now(),
+        },
+        401
+      );
+    }
+
+    const query = c.req.query();
+    const limit = query.limit ? Math.min(parseInt(query.limit), 100) : 20;
+    const offset = query.offset ? parseInt(query.offset) : 0;
+
+    const r2Service = createR2Service(c);
+    const files = await r2Service.getUserFiles(c, limit, offset);
+
+    return c.json({
+      success: true,
+      data: files,
+      pagination: {
+        limit,
+        offset,
+        count: files.length,
+      },
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to get user files",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Get file statistics
+app.get("/api/files/stats", requireAuth, async (c) => {
+  try {
+    const user = c.get("user");
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          error: "User not authenticated",
+          timestamp: Date.now(),
+        },
+        401
+      );
+    }
+
+    const r2Service = createR2Service(c);
+    const stats = await r2Service.getFileStats();
+
+    return c.json({
+      success: true,
+      data: stats,
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to get file statistics",
         timestamp: Date.now(),
       },
       500

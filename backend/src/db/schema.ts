@@ -5,6 +5,7 @@ import {
   integer,
   real,
   index,
+  foreignKey,
 } from "drizzle-orm/sqlite-core";
 
 // Users table with Clerk integration
@@ -79,31 +80,40 @@ export const chats = sqliteTable("chats", {
 });
 
 // Messages table
-export const messages = sqliteTable("messages", {
-  id: text("id").primaryKey(),
-  chatId: text("chat_id")
-    .references(() => chats.id)
-    .notNull(),
-  senderId: text("sender_id")
-    .references(() => users.id)
-    .notNull(),
-  content: text("content").notNull(),
-  type: text("type", { enum: ["text", "image", "file", "location"] }).default(
-    "text"
-  ),
-  metadata: text("metadata"), // JSON for additional data
-  replyToId: text("reply_to_id"),
-  isEdited: integer("is_edited", { mode: "boolean" }).default(false),
-  editedAt: integer("edited_at", { mode: "timestamp" }),
-  status: text("status", {
-    enum: ["sending", "sent", "delivered", "read"],
-  }).default("sent"),
-  sentAt: integer("sent_at", { mode: "timestamp" }),
-  deliveredAt: integer("delivered_at", { mode: "timestamp" }),
-  readAt: integer("read_at", { mode: "timestamp" }),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-});
+export const messages = sqliteTable(
+  "messages",
+  {
+    id: text("id").primaryKey(),
+    chatId: text("chat_id")
+      .references(() => chats.id)
+      .notNull(),
+    senderId: text("sender_id")
+      .references(() => users.id)
+      .notNull(),
+    content: text("content").notNull(),
+    type: text("type", { enum: ["text", "image", "file", "location"] }).default(
+      "text"
+    ),
+    metadata: text("metadata"), // JSON for additional data
+    replyToId: text("reply_to_id"),
+    isEdited: integer("is_edited", { mode: "boolean" }).default(false),
+    editedAt: integer("edited_at", { mode: "timestamp" }),
+    status: text("status", {
+      enum: ["sending", "sent", "delivered", "read"],
+    }).default("sent"),
+    sentAt: integer("sent_at", { mode: "timestamp" }),
+    deliveredAt: integer("delivered_at", { mode: "timestamp" }),
+    readAt: integer("read_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.replyToId],
+      foreignColumns: [table.id],
+    }),
+  ]
+);
 
 // Message reactions table
 export const messageReactions = sqliteTable("message_reactions", {
@@ -281,6 +291,29 @@ export const groupPosts = sqliteTable("group_posts", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+// Files table for R2 storage metadata
+export const files = sqliteTable("files", {
+  id: text("id").primaryKey(),
+  key: text("key").unique().notNull(), // R2 object key
+  filename: text("filename").notNull(),
+  originalName: text("original_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  size: integer("size").notNull(), // File size in bytes
+  uploadedBy: text("uploaded_by")
+    .references(() => users.id)
+    .notNull(),
+  bucket: text("bucket").default("nearby-connect-storage"),
+  etag: text("etag"),
+  checksum: text("checksum"), // For integrity verification
+  metadata: text("metadata"), // JSON for additional file metadata
+  isPublic: integer("is_public", { mode: "boolean" }).default(false),
+  downloadCount: integer("download_count").default(0),
+  lastAccessedAt: integer("last_accessed_at", { mode: "timestamp" }),
+  expiresAt: integer("expires_at", { mode: "timestamp" }), // For temporary files
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 // Export all tables
 export const tables = {
   users,
@@ -295,6 +328,7 @@ export const tables = {
   groups,
   groupMembers,
   groupPosts,
+  files,
   messageReactions,
   typingIndicators,
   userPresence,
