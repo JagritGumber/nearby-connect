@@ -314,11 +314,82 @@ export const files = sqliteTable("files", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+// Push notification tokens table
+export const pushTokens = sqliteTable("push_tokens", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .references(() => users.id)
+    .notNull(),
+  token: text("token").notNull(), // Expo push token
+  deviceId: text("device_id"), // Device identifier
+  platform: text("platform", { enum: ["ios", "android"] }).notNull(),
+  appVersion: text("app_version"),
+  isActive: integer("is_active", { mode: "boolean" }).default(true),
+  lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+  expiresAt: integer("expires_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+// Marketplace inquiries table
+export const marketplaceInquiries = sqliteTable("marketplace_inquiries", {
+  id: text("id").primaryKey(),
+  listingId: text("listing_id")
+    .references(() => marketplaceListings.id)
+    .notNull(),
+  inquirerId: text("inquirer_id")
+    .references(() => users.id)
+    .notNull(),
+  sellerId: text("seller_id")
+    .references(() => users.id)
+    .notNull(),
+  message: text("message").notNull(),
+  status: text("status", { enum: ["pending", "responded", "closed"] }).default("pending"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+// Notification preferences table
+export const notificationPreferences = sqliteTable("notification_preferences", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .references(() => users.id)
+    .notNull(),
+  // Message notifications
+  newMessages: integer("new_messages", { mode: "boolean" }).default(true),
+  newMessagesSound: integer("new_messages_sound", { mode: "boolean" }).default(true),
+  newMessagesVibration: integer("new_messages_vibration", { mode: "boolean" }).default(true),
+
+  // Friend request notifications
+  friendRequests: integer("friend_requests", { mode: "boolean" }).default(true),
+  friendRequestsSound: integer("friend_requests_sound", { mode: "boolean" }).default(true),
+  friendRequestsVibration: integer("friend_requests_vibration", { mode: "boolean" }).default(true),
+
+  // Marketplace notifications
+  marketplaceInquiries: integer("marketplace_inquiries", { mode: "boolean" }).default(true),
+  marketplaceInquiriesSound: integer("marketplace_inquiries_sound", { mode: "boolean" }).default(true),
+  marketplaceInquiriesVibration: integer("marketplace_inquiries_vibration", { mode: "boolean" }).default(true),
+
+  // Group notifications
+  groupInvitations: integer("group_invitations", { mode: "boolean" }).default(true),
+  groupInvitationsSound: integer("group_invitations_sound", { mode: "boolean" }).default(true),
+  groupInvitationsVibration: integer("group_invitations_vibration", { mode: "boolean" }).default(true),
+
+  // General settings
+  quietHoursStart: text("quiet_hours_start"), // HH:MM format
+  quietHoursEnd: text("quiet_hours_end"), // HH:MM format
+  timezone: text("timezone").default("UTC"),
+
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 // Export all tables
 export const tables = {
   users,
   friendRequests,
   marketplaceListings,
+  marketplaceInquiries,
   chats,
   messages,
   chatParticipants,
@@ -333,4 +404,6 @@ export const tables = {
   typingIndicators,
   userPresence,
   messageReceipts,
+  pushTokens,
+  notificationPreferences,
 };

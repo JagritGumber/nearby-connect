@@ -3,6 +3,7 @@ import { Context } from "hono";
 import { users, friendRequests } from "../db/schema";
 import { getCurrentUser } from "./auth";
 import { DefaultContext } from "../types/context";
+import { NotificationService } from "./notification-service";
 
 export interface CreateFriendRequestData {
   receiverId: string;
@@ -147,6 +148,27 @@ export const sendFriendRequest = async (
         .limit(1),
     ]);
 
+    // Send friend request notification
+    try {
+      const notificationService = new NotificationService(c);
+      const template = notificationService.getNotificationTemplate("friend_request", {
+        senderName: senderDetails[0]?.displayName || senderDetails[0]?.username || "Someone",
+      });
+
+      await notificationService.sendNotification(
+        receiverId,
+        "friend_request",
+        template,
+        {
+          senderName: senderDetails[0]?.displayName || senderDetails[0]?.username || "Someone",
+          requestId: createdRequest.id,
+        }
+      );
+    } catch (notificationError) {
+      // Log error but don't fail the friend request
+      console.error("Failed to send friend request notification:", notificationError);
+    }
+
     return {
       id: createdRequest.id,
       senderId: createdRequest.senderId,
@@ -243,6 +265,34 @@ export const updateFriendRequest = async (
         .where(eq(users.id, updatedRequest.receiverId))
         .limit(1),
     ]);
+
+    // Send notification if request was accepted
+    if (status === "accepted") {
+      try {
+        const notificationService = new NotificationService(c);
+        const template = notificationService.getNotificationTemplate("friend_request", {
+          senderName: receiverDetails[0]?.displayName || receiverDetails[0]?.username || "Someone",
+        });
+
+        await notificationService.sendNotification(
+          updatedRequest.senderId,
+          "friend_request",
+          {
+            ...template,
+            title: "Friend request accepted",
+            body: `${receiverDetails[0]?.displayName || receiverDetails[0]?.username || "Someone"} accepted your friend request`,
+          },
+          {
+            accepterName: receiverDetails[0]?.displayName || receiverDetails[0]?.username || "Someone",
+            requestId: updatedRequest.id,
+            accepted: true,
+          }
+        );
+      } catch (notificationError) {
+        // Log error but don't fail the friend request update
+        console.error("Failed to send friend request accepted notification:", notificationError);
+      }
+    }
 
     return {
       id: updatedRequest.id,

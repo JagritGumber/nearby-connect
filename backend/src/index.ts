@@ -40,6 +40,8 @@ import {
   updateListing,
   deleteListing,
   searchListings,
+  createMarketplaceInquiry,
+  getMarketplaceInquiries,
   MarketplaceFilters,
 } from "./lib/marketplace-service";
 import { DefaultContext } from "./types/context";
@@ -55,6 +57,7 @@ import {
   FILE_TYPE_CATEGORIES,
 } from "./lib/file-utils";
 import { FileCategory, FILE_UPLOAD_CONFIG } from "./lib/r2-service";
+import { NotificationService } from "./lib/notification-service";
 
 // Interface for ChatRoom Durable Object stub
 interface ChatRoomStub {
@@ -945,6 +948,67 @@ app.get("/api/marketplace/search", requireAuth, async (c) => {
   }
 });
 
+// Create marketplace inquiry
+app.post("/api/marketplace/:id/inquire", requireAuth, async (c) => {
+  try {
+    const listingId = c.req.param("id");
+    const body = await c.req.json();
+    const { message } = body;
+
+    if (!message) {
+      return c.json(
+        {
+          success: false,
+          error: "Message is required",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    const result = await createMarketplaceInquiry(c, listingId, message);
+
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to create inquiry",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Get marketplace inquiries for current user
+app.get("/api/marketplace/inquiries", requireAuth, async (c) => {
+  try {
+    const result = await getMarketplaceInquiries(c);
+
+    return c.json({
+      success: true,
+      data: result,
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to get inquiries",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
 // ===== FILE STORAGE ROUTES =====
 
 // Upload single file
@@ -1716,9 +1780,313 @@ async function persistMessageToDatabase(
   }
 }
 
+// ===== NOTIFICATION ROUTES =====
+
+// Register push token for user
+app.post("/api/notifications/register-token", requireAuth, async (c) => {
+  try {
+    const user = c.get("user");
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          error: "User not authenticated",
+          timestamp: Date.now(),
+        },
+        401
+      );
+    }
+
+    const body = await c.req.json();
+    const { token, platform, deviceId, appVersion } = body;
+
+    if (!token || !platform) {
+      return c.json(
+        {
+          success: false,
+          error: "Token and platform are required",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    if (!["ios", "android"].includes(platform)) {
+      return c.json(
+        {
+          success: false,
+          error: "Platform must be 'ios' or 'android'",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    const notificationService = new NotificationService(c);
+    await notificationService.registerPushToken(user.id, token, platform, deviceId, appVersion);
+
+    return c.json({
+      success: true,
+      message: "Push token registered successfully",
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to register push token",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Remove push token for user
+app.delete("/api/notifications/tokens/:token", requireAuth, async (c) => {
+  try {
+    const user = c.get("user");
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          error: "User not authenticated",
+          timestamp: Date.now(),
+        },
+        401
+      );
+    }
+
+    const token = c.req.param("token");
+    if (!token) {
+      return c.json(
+        {
+          success: false,
+          error: "Token is required",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    const notificationService = new NotificationService(c);
+    await notificationService.removePushToken(user.id, token);
+
+    return c.json({
+      success: true,
+      message: "Push token removed successfully",
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to remove push token",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Update notification preferences
+app.put("/api/notifications/preferences", requireAuth, async (c) => {
+  try {
+    const user = c.get("user");
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          error: "User not authenticated",
+          timestamp: Date.now(),
+        },
+        401
+      );
+    }
+
+    const body = await c.req.json();
+    const notificationService = new NotificationService(c);
+    await notificationService.updateNotificationPreferences(user.id, body);
+
+    return c.json({
+      success: true,
+      message: "Notification preferences updated successfully",
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to update notification preferences",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Send test notification
+app.post("/api/notifications/test", requireAuth, async (c) => {
+  try {
+    const user = c.get("user");
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          error: "User not authenticated",
+          timestamp: Date.now(),
+        },
+        401
+      );
+    }
+
+    const body = await c.req.json();
+    const { title, message } = body;
+
+    if (!title || !message) {
+      return c.json(
+        {
+          success: false,
+          error: "Title and message are required",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    const notificationService = new NotificationService(c);
+    const template = {
+      title,
+      body: message,
+      sound: "default" as const,
+      categoryId: "TEST",
+    };
+
+    const success = await notificationService.sendNotification(
+      user.id,
+      "new_message",
+      template,
+      { testNotification: true }
+    );
+
+    if (success) {
+      return c.json({
+        success: true,
+        message: "Test notification sent successfully",
+        timestamp: Date.now(),
+      });
+    } else {
+      return c.json(
+        {
+          success: false,
+          error: "Failed to send test notification. Make sure you have registered a push token.",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to send test notification",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Send notification to specific user (admin endpoint)
+app.post("/api/notifications/send", requireAuth, async (c) => {
+  try {
+    const user = c.get("user");
+    if (!user) {
+      return c.json(
+        {
+          success: false,
+          error: "User not authenticated",
+          timestamp: Date.now(),
+        },
+        401
+      );
+    }
+
+    const body = await c.req.json();
+    const { userId, type, title, message, data } = body;
+
+    if (!userId || !type || !title || !message) {
+      return c.json(
+        {
+          success: false,
+          error: "User ID, type, title, and message are required",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    if (!["new_message", "friend_request", "marketplace_inquiry", "group_invitation", "mention"].includes(type)) {
+      return c.json(
+        {
+          success: false,
+          error: "Invalid notification type",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    const notificationService = new NotificationService(c);
+    const template = {
+      title,
+      body: message,
+      sound: "default" as const,
+      categoryId: type.toUpperCase(),
+    };
+
+    const success = await notificationService.sendNotification(
+      userId,
+      type,
+      template,
+      data || {}
+    );
+
+    if (success) {
+      return c.json({
+        success: true,
+        message: "Notification sent successfully",
+        timestamp: Date.now(),
+      });
+    } else {
+      return c.json(
+        {
+          success: false,
+          error: "Failed to send notification",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to send notification",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
 // Legacy endpoint
 app.get("/message", (c) => {
   return c.text("Hello Hono!");
 });
+
+// Export Durable Objects
+export { ChatRoomDurableObject } from "./lib/chat-room-durable-object";
+export { PresenceDurableObject } from "./lib/presence-durable-object";
 
 export default app;

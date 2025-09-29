@@ -1,8 +1,9 @@
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
 import { Context } from "hono";
-import { users, marketplaceListings } from "../db/schema";
+import { users, marketplaceListings, marketplaceInquiries } from "../db/schema";
 import { getCurrentUser } from "./auth";
 import { DefaultContext } from "../types/context";
+import { NotificationService } from "./notification-service";
 
 export interface CreateListingData {
   title: string;
@@ -686,6 +687,203 @@ export const searchListings = async (
     }));
   } catch (error) {
     console.error("Error searching listings:", error);
+    throw error;
+  }
+};
+
+/**
+ * Create a marketplace inquiry for a listing
+ * @param c Hono context
+ * @param listingId ID of the listing to inquire about
+ * @param message Inquiry message
+ * @returns Created inquiry result
+ */
+export const createMarketplaceInquiry = async (
+  c: Context<DefaultContext>,
+  listingId: string,
+  message: string
+): Promise<{ success: boolean; message: string; inquiryId?: string }> => {
+  const currentUser = getCurrentUser(c);
+  const db = c.get("db");
+
+  if (!currentUser) {
+    throw new Error("User not authenticated");
+  }
+
+  if (!message || message.trim().length === 0) {
+    throw new Error("Inquiry message is required");
+  }
+
+  if (message.length > 1000) {
+    throw new Error("Message must be less than 1000 characters");
+  }
+
+  try {
+    // Get the listing and verify it exists and is active
+    const listing = await db
+      .select()
+      .from(marketplaceListings)
+      .where(
+        and(
+          eq(marketplaceListings.id, listingId),
+          eq(marketplaceListings.status, "active")
+        )
+      )
+      .limit(1);
+
+    if (listing.length === 0) {
+      throw new Error("Listing not found or not available");
+    }
+
+    const marketplaceListing = listing[0];
+
+    // Check if user is inquiring about their own listing
+    if (marketplaceListing.sellerId === currentUser.id) {
+      throw new Error("Cannot inquire about your own listing");
+    }
+
+    // Check if user already has a pending inquiry for this listing
+    const existingInquiry = await db
+      .select()
+      .from(marketplaceInquiries)
+      .where(
+        and(
+          eq(marketplaceInquiries.listingId, listingId),
+          eq(marketplaceInquiries.inquirerId, currentUser.id),
+          eq(marketplaceInquiries.status, "pending")
+        )
+      )
+      .limit(1);
+
+    if (existingInquiry.length > 0) {
+      throw new Error("You already have a pending inquiry for this listing");
+    }
+
+    // Create the inquiry
+    const newInquiry = {
+      id: crypto.randomUUID(),
+      listingId,
+      inquirerId: currentUser.id,
+      sellerId: marketplaceListing.sellerId,
+      message: message.trim(),
+      status: "pending" as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const result = await db
+      .insert(marketplaceInquiries)
+      .values(newInquiry)
+      .returning();
+
+    const createdInquiry = result[0];
+
+    // Send marketplace inquiry notification to seller
+    try {
+      const notificationService = new NotificationService(c);
+
+      // Get inquirer details for the notification
+      const inquirerDetails = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          displayName: users.displayName,
+        })
+        .from(users)
+        .where(eq(users.id, currentUser.id))
+        .limit(1);
+
+      const template = notificationService.getNotificationTemplate("marketplace_inquiry", {
+        itemTitle: marketplaceListing.title,
+        inquirerName: inquirerDetails[0]?.displayName || inquirerDetails[0]?.username || "Someone",
+      });
+
+      await notificationService.sendNotification(
+        marketplaceListing.sellerId,
+        "marketplace_inquiry",
+        template,
+        {
+          itemTitle: marketplaceListing.title,
+          inquirerName: inquirerDetails[0]?.displayName || inquirerDetails[0]?.username || "Someone",
+          inquiryMessage: message.trim(),
+          inquiryId: createdInquiry.id,
+        }
+      );
+    } catch (notificationError) {
+      // Log error but don't fail the inquiry creation
+      console.error("Failed to send marketplace inquiry notification:", notificationError);
+    }
+
+    return {
+      success: true,
+      message: "Inquiry sent successfully",
+      inquiryId: createdInquiry.id,
+    };
+  } catch (error) {
+    console.error("Error creating marketplace inquiry:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get marketplace inquiries for current user (as seller)
+ * @param c Hono context
+ * @returns Array of marketplace inquiries
+ */
+export const getMarketplaceInquiries = async (
+  c: Context<DefaultContext>
+): Promise<any[]> => {
+  const currentUser = getCurrentUser(c);
+  const db = c.get("db");
+
+  if (!currentUser) {
+    throw new Error("User not authenticated");
+  }
+
+  try {
+    const inquiries = await db
+      .select({
+        id: marketplaceInquiries.id,
+        listingId: marketplaceInquiries.listingId,
+        inquirerId: marketplaceInquiries.inquirerId,
+        sellerId: marketplaceInquiries.sellerId,
+        message: marketplaceInquiries.message,
+        status: marketplaceInquiries.status,
+        createdAt: marketplaceInquiries.createdAt,
+        updatedAt: marketplaceInquiries.updatedAt,
+        listing: {
+          id: marketplaceListings.id,
+          title: marketplaceListings.title,
+          price: marketplaceListings.price,
+          status: marketplaceListings.status,
+        },
+        inquirer: {
+          id: users.id,
+          username: users.username,
+          displayName: users.displayName,
+          avatar: users.avatar,
+        },
+      })
+      .from(marketplaceInquiries)
+      .innerJoin(marketplaceListings, eq(marketplaceInquiries.listingId, marketplaceListings.id))
+      .innerJoin(users, eq(marketplaceInquiries.inquirerId, users.id))
+      .where(eq(marketplaceInquiries.sellerId, currentUser.id))
+      .orderBy(desc(marketplaceInquiries.createdAt));
+
+    return inquiries.map((inquiry) => ({
+      id: inquiry.id,
+      listingId: inquiry.listingId,
+      inquirerId: inquiry.inquirerId,
+      sellerId: inquiry.sellerId,
+      message: inquiry.message,
+      status: inquiry.status,
+      createdAt: Number(inquiry.createdAt),
+      updatedAt: Number(inquiry.updatedAt),
+      listing: inquiry.listing,
+      inquirer: inquiry.inquirer,
+    }));
+  } catch (error) {
+    console.error("Error getting marketplace inquiries:", error);
     throw error;
   }
 };

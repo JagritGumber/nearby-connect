@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -10,21 +10,27 @@ import {
   Alert,
   ActivityIndicator,
   Image,
-} from 'react-native';
-import { useProfile, useUpdateProfile, useUpdateStatus } from '@/hooks/useProfileService';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+} from "react-native";
+import { useRouter } from "expo-router";
+import {
+  useProfile,
+  useUpdateProfile,
+  useUpdateStatus,
+} from "@/hooks/useProfileService";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { IconSymbol } from "@/components/ui/icon-symbol";
 
 export default function ProfileScreen() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
-    firstName: '',
-    lastName: '',
-    username: '',
-    bio: '',
+    firstName: "",
+    lastName: "",
+    username: "",
+    bio: "",
     interests: [] as string[],
   });
 
@@ -35,10 +41,10 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (profile) {
       setEditForm({
-        firstName: profile.firstName || '',
-        lastName: profile.lastName || '',
-        username: profile.username || '',
-        bio: profile.bio || '',
+        firstName: profile.firstName || "",
+        lastName: profile.lastName || "",
+        username: profile.username || "",
+        bio: profile.bio || "",
         interests: profile.interests || [],
       });
     }
@@ -55,7 +61,7 @@ export default function ProfileScreen() {
       await updateProfile.mutateAsync(editForm);
       setIsEditing(false);
     } catch (error) {
-      Alert.alert('Error', 'Failed to update profile');
+      Alert.alert("Error", "Failed to update profile");
     }
   };
 
@@ -65,7 +71,7 @@ export default function ProfileScreen() {
     try {
       await updateStatus.mutateAsync({ isOnline: !profile.isOnline });
     } catch (error) {
-      Alert.alert('Error', 'Failed to update status');
+      Alert.alert("Error", "Failed to update status");
     }
   };
 
@@ -76,7 +82,7 @@ export default function ProfileScreen() {
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-    if (minutes < 1) return 'Just now';
+    if (minutes < 1) return "Just now";
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ago`;
     return `${days}d ago`;
@@ -85,8 +91,16 @@ export default function ProfileScreen() {
   if (isLoading && !profile) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={Colors[colorScheme ?? 'light'].tint} />
-        <Text style={[styles.loadingText, { color: Colors[colorScheme ?? 'light'].text }]}>
+        <ActivityIndicator
+          size="large"
+          color={Colors[colorScheme ?? "light"].tint}
+        />
+        <Text
+          style={[
+            styles.loadingText,
+            { color: Colors[colorScheme ?? "light"].text },
+          ]}
+        >
           Loading profile...
         </Text>
       </View>
@@ -96,10 +110,20 @@ export default function ProfileScreen() {
   if (error) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <Text style={[styles.errorText, { color: Colors[colorScheme ?? 'light'].text }]}>
+        <Text
+          style={[
+            styles.errorText,
+            { color: Colors[colorScheme ?? "light"].text },
+          ]}
+        >
           Failed to load profile
         </Text>
-        <Text style={[styles.errorSubtext, { color: Colors[colorScheme ?? 'light'].text }]}>
+        <Text
+          style={[
+            styles.errorSubtext,
+            { color: Colors[colorScheme ?? "light"].text },
+          ]}
+        >
           {error.message}
         </Text>
       </View>
@@ -109,7 +133,12 @@ export default function ProfileScreen() {
   if (!profile) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <Text style={[styles.errorText, { color: Colors[colorScheme ?? 'light'].text }]}>
+        <Text
+          style={[
+            styles.errorText,
+            { color: Colors[colorScheme ?? "light"].text },
+          ]}
+        >
           Profile not found
         </Text>
       </View>
@@ -118,27 +147,44 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView
-      style={[styles.container, { backgroundColor: Colors[colorScheme ?? 'light'].background }]}
+      style={[
+        styles.container,
+        { backgroundColor: Colors[colorScheme ?? "light"].background },
+      ]}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
       {/* Profile Header */}
-      <View style={[styles.profileHeader, { backgroundColor: Colors[colorScheme ?? 'light'].tint }]}>
+      <View
+        style={[
+          styles.profileHeader,
+          { backgroundColor: Colors[colorScheme ?? "light"].tint },
+        ]}
+      >
         <View style={styles.avatarContainer}>
           {profile.avatar ? (
             <Image source={{ uri: profile.avatar }} style={styles.avatar} />
           ) : (
-            <View style={[styles.avatarPlaceholder, { backgroundColor: Colors[colorScheme ?? 'light'].background }]}>
-              <IconSymbol name="person.circle" size={60} color={Colors[colorScheme ?? 'light'].text} />
+            <View
+              style={[
+                styles.avatarPlaceholder,
+                { backgroundColor: Colors[colorScheme ?? "light"].background },
+              ]}
+            >
+              <IconSymbol
+                name="person.circle"
+                size={60}
+                color={Colors[colorScheme ?? "light"].text}
+              />
             </View>
           )}
         </View>
 
         <Text style={styles.profileName}>
           {profile.firstName || profile.lastName
-            ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim()
-            : profile.username || 'Anonymous'}
+            ? `${profile.firstName || ""} ${profile.lastName || ""}`.trim()
+            : profile.username || "Anonymous"}
         </Text>
 
         {profile.username && (
@@ -152,11 +198,13 @@ export default function ProfileScreen() {
           <View
             style={[
               styles.statusDot,
-              { backgroundColor: profile.isOnline ? '#4CAF50' : '#FFC107' }
+              { backgroundColor: profile.isOnline ? "#4CAF50" : "#FFC107" },
             ]}
           />
           <Text style={styles.statusText}>
-            {profile.isOnline ? 'Online' : `Last seen ${formatLastSeen(profile.lastSeen)}`}
+            {profile.isOnline
+              ? "Online"
+              : `Last seen ${formatLastSeen(profile.lastSeen)}`}
           </Text>
         </TouchableOpacity>
       </View>
@@ -167,15 +215,21 @@ export default function ProfileScreen() {
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={styles.editButton}
-            onPress={() => isEditing ? handleSaveProfile() : setIsEditing(true)}
+            onPress={() =>
+              isEditing ? handleSaveProfile() : setIsEditing(true)
+            }
           >
             {updateProfile.isPending ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <>
-                <IconSymbol name={isEditing ? "checkmark" : "pencil"} size={16} color="#fff" />
+                <IconSymbol
+                  name={isEditing ? "checkmark" : "pencil"}
+                  size={16}
+                  color="#fff"
+                />
                 <Text style={styles.editButtonText}>
-                  {isEditing ? 'Save' : 'Edit Profile'}
+                  {isEditing ? "Save" : "Edit Profile"}
                 </Text>
               </>
             )}
@@ -184,13 +238,30 @@ export default function ProfileScreen() {
 
         {/* Basic Info */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: Colors[colorScheme ?? 'light'].text }]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: Colors[colorScheme ?? "light"].text },
+            ]}
+          >
             Basic Information
           </Text>
 
           <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: Colors[colorScheme ?? 'light'].text }]}>Email</Text>
-            <Text style={[styles.infoValue, { color: Colors[colorScheme ?? 'light'].text }]}>
+            <Text
+              style={[
+                styles.infoLabel,
+                { color: Colors[colorScheme ?? "light"].text },
+              ]}
+            >
+              Email
+            </Text>
+            <Text
+              style={[
+                styles.infoValue,
+                { color: Colors[colorScheme ?? "light"].text },
+              ]}
+            >
               {profile.email}
             </Text>
           </View>
@@ -198,41 +269,77 @@ export default function ProfileScreen() {
           {isEditing ? (
             <>
               <View style={styles.inputRow}>
-                <Text style={[styles.inputLabel, { color: Colors[colorScheme ?? 'light'].text }]}>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: Colors[colorScheme ?? "light"].text },
+                  ]}
+                >
                   First Name
                 </Text>
                 <TextInput
-                  style={[styles.textInput, { color: Colors[colorScheme ?? 'light'].text }]}
+                  style={[
+                    styles.textInput,
+                    { color: Colors[colorScheme ?? "light"].text },
+                  ]}
                   value={editForm.firstName}
-                  onChangeText={(text) => setEditForm(prev => ({ ...prev, firstName: text }))}
+                  onChangeText={(text) =>
+                    setEditForm((prev) => ({ ...prev, firstName: text }))
+                  }
                   placeholder="Enter first name"
-                  placeholderTextColor={Colors[colorScheme ?? 'light'].text + '60'}
+                  placeholderTextColor={
+                    Colors[colorScheme ?? "light"].text + "60"
+                  }
                 />
               </View>
 
               <View style={styles.inputRow}>
-                <Text style={[styles.inputLabel, { color: Colors[colorScheme ?? 'light'].text }]}>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: Colors[colorScheme ?? "light"].text },
+                  ]}
+                >
                   Last Name
                 </Text>
                 <TextInput
-                  style={[styles.textInput, { color: Colors[colorScheme ?? 'light'].text }]}
+                  style={[
+                    styles.textInput,
+                    { color: Colors[colorScheme ?? "light"].text },
+                  ]}
                   value={editForm.lastName}
-                  onChangeText={(text) => setEditForm(prev => ({ ...prev, lastName: text }))}
+                  onChangeText={(text) =>
+                    setEditForm((prev) => ({ ...prev, lastName: text }))
+                  }
                   placeholder="Enter last name"
-                  placeholderTextColor={Colors[colorScheme ?? 'light'].text + '60'}
+                  placeholderTextColor={
+                    Colors[colorScheme ?? "light"].text + "60"
+                  }
                 />
               </View>
 
               <View style={styles.inputRow}>
-                <Text style={[styles.inputLabel, { color: Colors[colorScheme ?? 'light'].text }]}>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: Colors[colorScheme ?? "light"].text },
+                  ]}
+                >
                   Username
                 </Text>
                 <TextInput
-                  style={[styles.textInput, { color: Colors[colorScheme ?? 'light'].text }]}
+                  style={[
+                    styles.textInput,
+                    { color: Colors[colorScheme ?? "light"].text },
+                  ]}
                   value={editForm.username}
-                  onChangeText={(text) => setEditForm(prev => ({ ...prev, username: text }))}
+                  onChangeText={(text) =>
+                    setEditForm((prev) => ({ ...prev, username: text }))
+                  }
                   placeholder="Enter username"
-                  placeholderTextColor={Colors[colorScheme ?? 'light'].text + '60'}
+                  placeholderTextColor={
+                    Colors[colorScheme ?? "light"].text + "60"
+                  }
                 />
               </View>
             </>
@@ -240,10 +347,20 @@ export default function ProfileScreen() {
             <>
               {profile.firstName && (
                 <View style={styles.infoRow}>
-                  <Text style={[styles.infoLabel, { color: Colors[colorScheme ?? 'light'].text }]}>
+                  <Text
+                    style={[
+                      styles.infoLabel,
+                      { color: Colors[colorScheme ?? "light"].text },
+                    ]}
+                  >
                     First Name
                   </Text>
-                  <Text style={[styles.infoValue, { color: Colors[colorScheme ?? 'light'].text }]}>
+                  <Text
+                    style={[
+                      styles.infoValue,
+                      { color: Colors[colorScheme ?? "light"].text },
+                    ]}
+                  >
                     {profile.firstName}
                   </Text>
                 </View>
@@ -251,10 +368,20 @@ export default function ProfileScreen() {
 
               {profile.lastName && (
                 <View style={styles.infoRow}>
-                  <Text style={[styles.infoLabel, { color: Colors[colorScheme ?? 'light'].text }]}>
+                  <Text
+                    style={[
+                      styles.infoLabel,
+                      { color: Colors[colorScheme ?? "light"].text },
+                    ]}
+                  >
                     Last Name
                   </Text>
-                  <Text style={[styles.infoValue, { color: Colors[colorScheme ?? 'light'].text }]}>
+                  <Text
+                    style={[
+                      styles.infoValue,
+                      { color: Colors[colorScheme ?? "light"].text },
+                    ]}
+                  >
                     {profile.lastName}
                   </Text>
                 </View>
@@ -262,10 +389,20 @@ export default function ProfileScreen() {
 
               {profile.username && (
                 <View style={styles.infoRow}>
-                  <Text style={[styles.infoLabel, { color: Colors[colorScheme ?? 'light'].text }]}>
+                  <Text
+                    style={[
+                      styles.infoLabel,
+                      { color: Colors[colorScheme ?? "light"].text },
+                    ]}
+                  >
                     Username
                   </Text>
-                  <Text style={[styles.infoValue, { color: Colors[colorScheme ?? 'light'].text }]}>
+                  <Text
+                    style={[
+                      styles.infoValue,
+                      { color: Colors[colorScheme ?? "light"].text },
+                    ]}
+                  >
                     @{profile.username}
                   </Text>
                 </View>
@@ -276,7 +413,12 @@ export default function ProfileScreen() {
 
         {/* Bio Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: Colors[colorScheme ?? 'light'].text }]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: Colors[colorScheme ?? "light"].text },
+            ]}
+          >
             About
           </Text>
 
@@ -284,26 +426,41 @@ export default function ProfileScreen() {
             <TextInput
               style={[
                 styles.bioInput,
-                { color: Colors[colorScheme ?? 'light'].text, backgroundColor: Colors[colorScheme ?? 'light'].background }
+                {
+                  color: Colors[colorScheme ?? "light"].text,
+                  backgroundColor: Colors[colorScheme ?? "light"].background,
+                },
               ]}
               value={editForm.bio}
-              onChangeText={(text) => setEditForm(prev => ({ ...prev, bio: text }))}
+              onChangeText={(text) =>
+                setEditForm((prev) => ({ ...prev, bio: text }))
+              }
               placeholder="Tell us about yourself..."
-              placeholderTextColor={Colors[colorScheme ?? 'light'].text + '60'}
+              placeholderTextColor={Colors[colorScheme ?? "light"].text + "60"}
               multiline
               numberOfLines={4}
               textAlignVertical="top"
             />
           ) : (
-            <Text style={[styles.bio, { color: Colors[colorScheme ?? 'light'].text }]}>
-              {profile.bio || 'No bio added yet'}
+            <Text
+              style={[
+                styles.bio,
+                { color: Colors[colorScheme ?? "light"].text },
+              ]}
+            >
+              {profile.bio || "No bio added yet"}
             </Text>
           )}
         </View>
 
         {/* Interests Section */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: Colors[colorScheme ?? 'light'].text }]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: Colors[colorScheme ?? "light"].text },
+            ]}
+          >
             Interests
           </Text>
 
@@ -311,28 +468,55 @@ export default function ProfileScreen() {
             <TextInput
               style={[
                 styles.textInput,
-                { color: Colors[colorScheme ?? 'light'].text, backgroundColor: Colors[colorScheme ?? 'light'].background }
+                {
+                  color: Colors[colorScheme ?? "light"].text,
+                  backgroundColor: Colors[colorScheme ?? "light"].background,
+                },
               ]}
-              value={editForm.interests.join(', ')}
-              onChangeText={(text) => setEditForm(prev => ({
-                ...prev,
-                interests: text.split(',').map(i => i.trim()).filter(i => i.length > 0)
-              }))}
+              value={editForm.interests.join(", ")}
+              onChangeText={(text) =>
+                setEditForm((prev) => ({
+                  ...prev,
+                  interests: text
+                    .split(",")
+                    .map((i) => i.trim())
+                    .filter((i) => i.length > 0),
+                }))
+              }
               placeholder="e.g. hiking, reading, gaming"
-              placeholderTextColor={Colors[colorScheme ?? 'light'].text + '60'}
+              placeholderTextColor={Colors[colorScheme ?? "light"].text + "60"}
             />
           ) : (
             <View style={styles.interestsContainer}>
               {profile.interests && profile.interests.length > 0 ? (
                 profile.interests.map((interest, index) => (
-                  <View key={index} style={[styles.interestTag, { backgroundColor: Colors[colorScheme ?? 'light'].tint + '20' }]}>
-                    <Text style={[styles.interestText, { color: Colors[colorScheme ?? 'light'].tint }]}>
+                  <View
+                    key={index}
+                    style={[
+                      styles.interestTag,
+                      {
+                        backgroundColor:
+                          Colors[colorScheme ?? "light"].tint + "20",
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.interestText,
+                        { color: Colors[colorScheme ?? "light"].tint },
+                      ]}
+                    >
                       {interest}
                     </Text>
                   </View>
                 ))
               ) : (
-                <Text style={[styles.noInterests, { color: Colors[colorScheme ?? 'light'].text + '60' }]}>
+                <Text
+                  style={[
+                    styles.noInterests,
+                    { color: Colors[colorScheme ?? "light"].text + "60" },
+                  ]}
+                >
                   No interests added yet
                 </Text>
               )}
@@ -340,26 +524,89 @@ export default function ProfileScreen() {
           )}
         </View>
 
+        {/* Settings */}
+        <View style={styles.section}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: Colors[colorScheme ?? "light"].text },
+            ]}
+          >
+            Settings
+          </Text>
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => router.push("/settings/notifications")}
+          >
+            <View style={styles.settingContent}>
+              <IconSymbol
+                name="bell.fill"
+                size={20}
+                color={Colors[colorScheme ?? "light"].text}
+              />
+              <Text
+                style={[
+                  styles.settingText,
+                  { color: Colors[colorScheme ?? "light"].text },
+                ]}
+              >
+                Notification Settings
+              </Text>
+            </View>
+            <IconSymbol
+              name="chevron.right"
+              size={16}
+              color={Colors[colorScheme ?? "light"].text + "60"}
+            />
+          </TouchableOpacity>
+        </View>
+
         {/* Account Info */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: Colors[colorScheme ?? 'light'].text }]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: Colors[colorScheme ?? "light"].text },
+            ]}
+          >
             Account Information
           </Text>
 
           <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: Colors[colorScheme ?? 'light'].text }]}>
+            <Text
+              style={[
+                styles.infoLabel,
+                { color: Colors[colorScheme ?? "light"].text },
+              ]}
+            >
               Member since
             </Text>
-            <Text style={[styles.infoValue, { color: Colors[colorScheme ?? 'light'].text }]}>
+            <Text
+              style={[
+                styles.infoValue,
+                { color: Colors[colorScheme ?? "light"].text },
+              ]}
+            >
               {new Date(profile.createdAt).toLocaleDateString()}
             </Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: Colors[colorScheme ?? 'light'].text }]}>
+            <Text
+              style={[
+                styles.infoLabel,
+                { color: Colors[colorScheme ?? "light"].text },
+              ]}
+            >
               Last updated
             </Text>
-            <Text style={[styles.infoValue, { color: Colors[colorScheme ?? 'light'].text }]}>
+            <Text
+              style={[
+                styles.infoValue,
+                { color: Colors[colorScheme ?? "light"].text },
+              ]}
+            >
               {new Date(profile.updatedAt).toLocaleDateString()}
             </Text>
           </View>
@@ -374,12 +621,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   centered: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 32,
   },
   profileHeader: {
-    alignItems: 'center',
+    alignItems: "center",
     padding: 24,
     paddingTop: 60,
   },
@@ -395,24 +642,24 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   profileName: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontWeight: "bold",
+    color: "#fff",
     marginBottom: 4,
   },
   profileUsername: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
+    color: "rgba(255,255,255,0.8)",
     marginBottom: 12,
   },
   statusButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.2)",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -424,50 +671,50 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   statusText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   profileContent: {
     flex: 1,
   },
   actionRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
     padding: 16,
   },
   editButton: {
-    backgroundColor: '#007AFF',
-    flexDirection: 'row',
-    alignItems: 'center',
+    backgroundColor: "#007AFF",
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
   },
   editButtonText: {
-    color: '#fff',
+    color: "#fff",
     marginLeft: 8,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   section: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    borderBottomColor: "rgba(0,0,0,0.1)",
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 12,
   },
   infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 8,
   },
   infoLabel: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   infoValue: {
     fontSize: 14,
@@ -477,19 +724,19 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
     marginBottom: 8,
   },
   textInput: {
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.2)',
+    borderColor: "rgba(0,0,0,0.2)",
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
   },
   bioInput: {
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.2)',
+    borderColor: "rgba(0,0,0,0.2)",
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
@@ -500,8 +747,8 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   interestsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
   interestTag: {
     paddingHorizontal: 12,
@@ -512,26 +759,41 @@ const styles = StyleSheet.create({
   },
   interestText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   noInterests: {
     fontSize: 16,
-    fontStyle: 'italic',
+    fontStyle: "italic",
+  },
+  settingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  settingContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  settingText: {
+    fontSize: 16,
+    marginLeft: 12,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
   errorText: {
     fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: "600",
+    textAlign: "center",
     marginBottom: 8,
   },
   errorSubtext: {
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: "center",
     opacity: 0.7,
   },
 });

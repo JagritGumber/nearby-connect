@@ -8,6 +8,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || '';
 
@@ -25,6 +26,12 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
+// Component to handle push notifications initialization
+function PushNotificationProvider({ children }: { children: React.ReactNode }) {
+  usePushNotifications();
+  return <>{children}</>;
+}
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
@@ -33,29 +40,31 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
           <ClerkLoaded>
-            <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-              <Stack>
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-                <Stack.Screen
-                  name="sign-in"
-                  options={{
-                    presentation: 'modal',
-                    title: 'Sign In',
-                    headerShown: false,
-                  }}
-                />
-                <Stack.Screen
-                  name="sign-up"
-                  options={{
-                    presentation: 'modal',
-                    title: 'Sign Up',
-                    headerShown: false,
-                  }}
-                />
-              </Stack>
-              <StatusBar style="auto" />
-            </ThemeProvider>
+            <PushNotificationProvider>
+              <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+                <Stack>
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+                  <Stack.Screen
+                    name="sign-in"
+                    options={{
+                      presentation: 'modal',
+                      title: 'Sign In',
+                      headerShown: false,
+                    }}
+                  />
+                  <Stack.Screen
+                    name="sign-up"
+                    options={{
+                      presentation: 'modal',
+                      title: 'Sign Up',
+                      headerShown: false,
+                    }}
+                  />
+                </Stack>
+                <StatusBar style="auto" />
+              </ThemeProvider>
+            </PushNotificationProvider>
           </ClerkLoaded>
         </ClerkProvider>
       </QueryClientProvider>

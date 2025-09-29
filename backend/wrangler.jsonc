@@ -52,18 +52,6 @@
 	"durable_objects": {
 		"bindings": [
 			{
-				"name": "DO_SESSION",
-				"class_name": "SessionManager"
-			},
-			{
-				"name": "DO_WEBSOCKET",
-				"class_name": "WebSocketManager"
-			},
-			{
-				"name": "DO_LOCATION",
-				"class_name": "LocationTracker"
-			},
-			{
 				"name": "DO_CHAT_ROOM",
 				"class_name": "ChatRoomDurableObject"
 			},
@@ -135,9 +123,6 @@
 		{
 			"tag": "v1",
 			"new_classes": [
-				"SessionManager",
-				"WebSocketManager",
-				"LocationTracker",
 				"ChatRoomDurableObject",
 				"PresenceDurableObject"
 			]
