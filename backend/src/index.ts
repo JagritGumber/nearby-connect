@@ -43,6 +43,20 @@ import {
   MarketplaceFilters,
 } from "./lib/marketplace-service";
 import { DefaultContext } from "./types/context";
+import { ChatRoomDurableObject } from "./lib/chat-room-durable-object";
+import { PresenceDurableObject } from "./lib/presence-durable-object";
+import { messages, chats } from "./db/schema";
+import { eq } from "drizzle-orm";
+
+// Interface for ChatRoom Durable Object stub
+interface ChatRoomStub {
+  fetch(request: Request): Promise<Response>;
+  getState(): Promise<{
+    connectionCount: number;
+    userCount: number;
+    typingUsers: string[];
+  }>;
+}
 
 const app = new Hono<DefaultContext>();
 
@@ -922,6 +936,309 @@ app.get("/api/marketplace/search", requireAuth, async (c) => {
     );
   }
 });
+
+// ===== WEBSOCKET AND REAL-TIME MESSAGING ROUTES =====
+
+// WebSocket upgrade endpoint for chat rooms
+app.get("/api/chat/:chatId/ws", requireAuth, async (c) => {
+  const chatId = c.req.param("chatId");
+
+  if (!chatId) {
+    return c.json(
+      {
+        success: false,
+        error: "Chat ID is required",
+        timestamp: Date.now(),
+      },
+      400
+    );
+  }
+
+  // Get Durable Object for this chat room
+  const chatRoomId = c.env.DO_CHAT_ROOM.idFromName(chatId);
+  const chatRoomStub = c.env.DO_CHAT_ROOM.get(chatRoomId);
+
+  // Forward the request to the Durable Object
+  return await chatRoomStub.fetch(c.req.raw);
+});
+
+// WebSocket upgrade endpoint for presence
+app.get("/api/presence/ws", requireAuth, async (c) => {
+  // Get Durable Object for presence management
+  const presenceId = c.env.DO_PRESENCE.idFromName("global");
+  const presenceStub = c.env.DO_PRESENCE.get(presenceId);
+
+  // Forward the request to the Durable Object
+  return await presenceStub.fetch(c.req.raw);
+});
+
+// Send message to chat room
+app.post("/api/chat/:chatId/message", requireAuth, async (c) => {
+  try {
+    const chatId = c.req.param("chatId");
+    const body = await c.req.json();
+
+    if (!chatId) {
+      return c.json(
+        {
+          success: false,
+          error: "Chat ID is required",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    if (!body.content || !body.type) {
+      return c.json(
+        {
+          success: false,
+          error: "Message content and type are required",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    // Get Durable Object for this chat room
+    const chatRoomId = c.env.DO_CHAT_ROOM.idFromName(chatId);
+    const chatRoomStub = c.env.DO_CHAT_ROOM.get(chatRoomId);
+
+    // Create a new request to send the message
+    const messageRequest = new Request(
+      `http://internal/chat/${chatId}/message`,
+      {
+        method: "POST",
+        headers: c.req.raw.headers,
+        body: JSON.stringify(body),
+      }
+    );
+
+    // Forward the request to the Durable Object
+    const response = await chatRoomStub.fetch(messageRequest);
+
+    if (response.ok) {
+      // Also persist message to database
+      await persistMessageToDatabase(c, chatId, body);
+    }
+
+    return response;
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to send message",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Update typing indicator
+app.post("/api/chat/:chatId/typing", requireAuth, async (c) => {
+  try {
+    const chatId = c.req.param("chatId");
+    const body = await c.req.json();
+
+    if (!chatId) {
+      return c.json(
+        {
+          success: false,
+          error: "Chat ID is required",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    // Get Durable Object for this chat room
+    const chatRoomId = c.env.DO_CHAT_ROOM.idFromName(chatId);
+    const chatRoomStub = c.env.DO_CHAT_ROOM.get(chatRoomId);
+
+    // Create a new request for typing indicator
+    const typingRequest = new Request(`http://internal/chat/${chatId}/typing`, {
+      method: "POST",
+      headers: c.req.raw.headers,
+      body: JSON.stringify(body),
+    });
+
+    // Forward the request to the Durable Object
+    return await chatRoomStub.fetch(typingRequest);
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to update typing indicator",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Update user presence
+app.post("/api/presence", requireAuth, async (c) => {
+  try {
+    const body = await c.req.json();
+
+    if (!body.status) {
+      return c.json(
+        {
+          success: false,
+          error: "Presence status is required",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    // Get Durable Object for presence management
+    const presenceId = c.env.DO_PRESENCE.idFromName("global");
+    const presenceStub = c.env.DO_PRESENCE.get(presenceId);
+
+    // Create a new request for presence update
+    const presenceRequest = new Request("http://internal/presence", {
+      method: "POST",
+      headers: c.req.raw.headers,
+      body: JSON.stringify(body),
+    });
+
+    // Forward the request to the Durable Object
+    return await presenceStub.fetch(presenceRequest);
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to update presence",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Get user presence
+app.get("/api/presence/:userId", requireAuth, async (c) => {
+  try {
+    const userId = c.req.param("userId");
+
+    if (!userId) {
+      return c.json(
+        {
+          success: false,
+          error: "User ID is required",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    // Get Durable Object for presence management
+    const presenceId = c.env.DO_PRESENCE.idFromName("global");
+    const presenceStub = c.env.DO_PRESENCE.get(presenceId);
+
+    // Create a new request to get presence status
+    const statusRequest = new Request(`http://internal/presence/${userId}`);
+
+    // Forward the request to the Durable Object
+    return await presenceStub.fetch(statusRequest);
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to get presence",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Get chat room state
+app.get("/api/chat/:chatId/state", requireAuth, async (c) => {
+  try {
+    const chatId = c.req.param("chatId");
+
+    if (!chatId) {
+      return c.json(
+        {
+          success: false,
+          error: "Chat ID is required",
+          timestamp: Date.now(),
+        },
+        400
+      );
+    }
+
+    // Get Durable Object for this chat room
+    const chatRoomId = c.env.DO_CHAT_ROOM.idFromName(chatId);
+    const chatRoomStub = c.env.DO_CHAT_ROOM.get(chatRoomId);
+
+    // Get current state from Durable Object
+    const state = await (chatRoomStub as unknown as ChatRoomStub).getState();
+
+    return c.json({
+      success: true,
+      data: state,
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to get chat state",
+        timestamp: Date.now(),
+      },
+      500
+    );
+  }
+});
+
+// Helper function to persist messages to database
+async function persistMessageToDatabase(
+  c: any,
+  chatId: string,
+  messageData: any
+): Promise<void> {
+  try {
+    const db = c.get("db");
+    const userId = c.get("userId"); // Assuming auth middleware sets this
+
+    // Insert message into database
+    await db.insert(messages).values({
+      id: crypto.randomUUID(),
+      chatId,
+      senderId: userId,
+      content: messageData.content,
+      type: messageData.type,
+      metadata: JSON.stringify(messageData.metadata || {}),
+      status: "sent",
+      sentAt: Date.now(),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    // Update chat's last message timestamp
+    await db
+      .update(chats)
+      .set({
+        lastMessageAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      .where(eq(chats.id, chatId));
+  } catch (error) {
+    console.error("Failed to persist message to database:", error);
+    // Don't throw error - WebSocket message was already sent successfully
+  }
+}
 
 // Legacy endpoint
 app.get("/message", (c) => {

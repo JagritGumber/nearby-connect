@@ -1,5 +1,11 @@
 import { relations } from "drizzle-orm";
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  integer,
+  real,
+  index,
+} from "drizzle-orm/sqlite-core";
 
 // Users table with Clerk integration
 export const users = sqliteTable("users", {
@@ -89,8 +95,70 @@ export const messages = sqliteTable("messages", {
   replyToId: text("reply_to_id"),
   isEdited: integer("is_edited", { mode: "boolean" }).default(false),
   editedAt: integer("edited_at", { mode: "timestamp" }),
+  status: text("status", {
+    enum: ["sending", "sent", "delivered", "read"],
+  }).default("sent"),
+  sentAt: integer("sent_at", { mode: "timestamp" }),
+  deliveredAt: integer("delivered_at", { mode: "timestamp" }),
+  readAt: integer("read_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+// Message reactions table
+export const messageReactions = sqliteTable("message_reactions", {
+  id: text("id").primaryKey(),
+  messageId: text("message_id")
+    .references(() => messages.id)
+    .notNull(),
+  userId: text("user_id")
+    .references(() => users.id)
+    .notNull(),
+  reaction: text("reaction").notNull(), // emoji or reaction type
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+// Typing indicators table
+export const typingIndicators = sqliteTable("typing_indicators", {
+  id: text("id").primaryKey(),
+  chatId: text("chat_id")
+    .references(() => chats.id)
+    .notNull(),
+  userId: text("user_id")
+    .references(() => users.id)
+    .notNull(),
+  isTyping: integer("is_typing", { mode: "boolean" }).default(true),
+  lastTypedAt: integer("last_typed_at", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+// User presence table
+export const userPresence = sqliteTable("user_presence", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .references(() => users.id)
+    .notNull(),
+  status: text("status", { enum: ["online", "away", "offline"] }).default(
+    "offline"
+  ),
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp" }).notNull(),
+  deviceInfo: text("device_info"), // JSON with device/browser info
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+// Message delivery receipts table
+export const messageReceipts = sqliteTable("message_receipts", {
+  id: text("id").primaryKey(),
+  messageId: text("message_id")
+    .references(() => messages.id)
+    .notNull(),
+  userId: text("user_id")
+    .references(() => users.id)
+    .notNull(),
+  status: text("status", { enum: ["sent", "delivered", "read"] }).notNull(),
+  timestamp: integer("timestamp", { mode: "timestamp" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
 // Chat participants table (for group chats)
@@ -227,4 +295,8 @@ export const tables = {
   groups,
   groupMembers,
   groupPosts,
+  messageReactions,
+  typingIndicators,
+  userPresence,
+  messageReceipts,
 };

@@ -62,6 +62,14 @@
 			{
 				"name": "DO_LOCATION",
 				"class_name": "LocationTracker"
+			},
+			{
+				"name": "DO_CHAT_ROOM",
+				"class_name": "ChatRoomDurableObject"
+			},
+			{
+				"name": "DO_PRESENCE",
+				"class_name": "PresenceDurableObject"
 			}
 		]
 	},
@@ -129,7 +137,9 @@
 			"new_classes": [
 				"SessionManager",
 				"WebSocketManager",
-				"LocationTracker"
+				"LocationTracker",
+				"ChatRoomDurableObject",
+				"PresenceDurableObject"
 			]
 		}
 	]
